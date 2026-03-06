@@ -1,0 +1,15 @@
+{
+  "name": "zmz-website",
+  "version": "1.0.0",
+  "description": "ZMZ Prison Website - Real Deal",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  }
+}

